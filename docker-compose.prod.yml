@@ -1,0 +1,89 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: ob-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-observabox}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-observabox}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./infra/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: apps/ingestion/Dockerfile
+    container_name: ob-ingestion
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_HOST: http://clickhouse:8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-observabox}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-observabox}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      INGESTION_PORT: 4318
+      INGESTION_API_KEY: ${INGESTION_API_KEY}
+      LOG_LEVEL: warn
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks: [internal]
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: ob-dashboard
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_HOST: http://clickhouse:8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-observabox}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-observabox}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEFAULT_PROJECT_ID: default
+      PORT: 3001
+    volumes:
+      - dashboard_data:/app/apps/dashboard/data
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ob-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [ingestion, dashboard]
+    networks: [internal]
+
+volumes:
+  clickhouse_data:
+  dashboard_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge

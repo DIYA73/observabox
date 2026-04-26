@@ -1,0 +1,10 @@
+# ObservaBox — Caddy reverse proxy with automatic HTTPS
+# Replace {$DOMAIN} with your domain in .env.prod
+
+{$DOMAIN} {
+    reverse_proxy dashboard:3001
+}
+
+ingest.{$DOMAIN} {
+    reverse_proxy ingestion:4318
+}
