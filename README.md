@@ -2,7 +2,6 @@
 
 A self-hosted observability platform for indie SaaS founders. Collect logs, metrics, and traces from any Node.js or Laravel app via a tiny SDK, store them in ClickHouse, and visualise everything in a real-time Next.js dashboard — with AI-powered incident summaries.
 
-![ObservaBox Dashboard](https://raw.githubusercontent.com/yourusername/observabox/main/docs/dashboard.png)
 
 ## Features
 
